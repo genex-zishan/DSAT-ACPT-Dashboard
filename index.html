@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DSAT ACPT Analysis Dashboard</title>
+<title>DSAT ACPT Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -482,16 +482,16 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
 <!-- API KEY MODAL -->
 <div class="apikey-modal-overlay" id="apikeyModal">
   <div class="apikey-modal">
-    <h3>🔑 Google Gemini API Key</h3>
-    <p>A free Gemini API key is required. It will be saved in your browser and never sent anywhere except directly to Google.</p>
-    <input class="apikey-input" id="apikeyInput" type="password" placeholder="AIza..." autocomplete="off">
+    <h3>🔑 Groq API Key</h3>
+    <p>A free Groq API key is required. It will be saved in your browser and never sent anywhere except directly to Groq.</p>
+    <input class="apikey-input" id="apikeyInput" type="password" placeholder="gsk_..." autocomplete="off">
     <div class="apikey-error" id="apikeyError"></div>
     <div class="apikey-actions">
       <button class="apikey-save-btn" id="apikeySaveBtn" onclick="saveApiKey()">Save & Summarize</button>
       <button class="apikey-cancel-btn" onclick="closeApiKeyModal()">Cancel</button>
     </div>
     <div class="apikey-hint">
-      Get your free API key at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a> &nbsp;·&nbsp;
+      Get your free API key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a> &nbsp;·&nbsp;
       <a href="#" onclick="clearApiKey();return false;">Forget saved key</a>
     </div>
   </div>
@@ -1139,7 +1139,7 @@ function renderVoices() {
 // ═══════════════════════════════════════════
 // API KEY MANAGEMENT (Google Gemini — free tier)
 // ═══════════════════════════════════════════
-const APIKEY_LS = 'acpt_gemini_key';
+const APIKEY_LS = 'acpt_groq_key';
 let _pendingSummarize = false;
 
 function getApiKey() {
@@ -1158,7 +1158,7 @@ function closeApiKeyModal() {
 function saveApiKey() {
   const key = document.getElementById('apikeyInput').value.trim();
   if (!key || key.length < 10) {
-    document.getElementById('apikeyError').textContent = 'Please enter a valid Gemini API key.';
+    document.getElementById('apikeyError').textContent = 'Please enter a valid Groq API key (starts with gsk_).';
     return;
   }
   localStorage.setItem(APIKEY_LS, key);
@@ -1167,9 +1167,9 @@ function saveApiKey() {
 }
 
 async function summarizeVoices() {
-  // Clear any leftover key from old Anthropic setup
+  // Clear any leftover key that isn't a Groq key
   const oldKey = localStorage.getItem(APIKEY_LS) || '';
-  if (oldKey && !oldKey.startsWith('AIza')) {
+  if (oldKey && !oldKey.startsWith('gsk_')) {
     localStorage.removeItem(APIKEY_LS);
   }
 
@@ -1225,13 +1225,18 @@ Keep the summary under 250 words. Write in clear professional English.`;
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 1000, temperature: 0.4 }
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 1000,
+          temperature: 0.4
         })
       }
     );
@@ -1239,17 +1244,16 @@ Keep the summary under 250 words. Write in clear professional English.`;
     const data = await res.json();
 
     if (data.error) {
-      const code = data.error.code;
-      const msg  = data.error.message || 'Gemini API error';
-      // Bad/expired key — clear it and re-prompt
-      if (code === 400 || code === 403 || code === 401) {
+      const code = res.status;
+      const msg  = data.error.message || 'Groq API error';
+      if (code === 401 || code === 403) {
         localStorage.removeItem(APIKEY_LS);
-        errorMsg = `API key rejected (${code}): ${msg} — click Summarize again to enter a new key.`;
+        errorMsg = `Invalid API key — click Summarize again to enter a new key.`;
       } else {
-        errorMsg = `Gemini error (${code}): ${msg}`;
+        errorMsg = `Groq error (${code}): ${msg}`;
       }
     } else {
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary generated.';
+      const text = data.choices?.[0]?.message?.content || 'No summary generated.';
       summaryBox.innerHTML = `<div class="voice-summary-text">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
       showToast('Customer Voice summary generated', 'success');
     }
