@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSAT ACPT Analysis Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg-base:       #0d1117;
+  --bg-surface:    #161b22;
+  --bg-elevated:   #1c2333;
+  --bg-hover:      #21262d;
+  --border:        #30363d;
+  --border-muted:  #21262d;
+  --text-primary:  #e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:    #6e7681;
+  --blue:          #58a6ff;
+  --blue-dim:      rgba(88,166,255,0.15);
+  --green:         #3fb950;
+  --green-dim:     rgba(63,185,80,0.15);
+  --orange:        #e3b341;
+  --orange-dim:    rgba(227,179,65,0.15);
+  --red:           #f85149;
+  --red-dim:       rgba(248,81,73,0.15);
+  --purple:        #bc8cff;
+  --purple-dim:    rgba(188,140,255,0.15);
+  --cyan:          #79c0ff;
+  --pink:          #ff7b72;
+  --teal:          #39d353;
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --shadow:     0 4px 24px rgba(0,0,0,0.4);
+  --shadow-lg:  0 8px 40px rgba(0,0,0,0.6);
+  --transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-base);color:var(--text-primary);min-height:100vh;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-base)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+/* LOADING */
+#loadingOverlay{position:fixed;inset:0;z-index:9999;background:var(--bg-base);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity 0.5s ease}
+#loadingOverlay.hidden{opacity:0;pointer-events:none}
+.loader-ring{width:56px;height:56px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-text{color:var(--text-secondary);font-size:0.88rem;letter-spacing:1px}
+.loader-sub{color:var(--text-muted);font-size:0.75rem}
+.loader-progress{width:220px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.loader-progress-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:2px;width:0%;transition:width 0.4s ease}
+
+/* HEADER */
+.header{background:var(--bg-surface);border-bottom:1px solid var(--border);padding:0 32px;height:68px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--red),var(--orange));border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.header-title{font-size:1rem;font-weight:700;color:var(--text-primary)}
+.header-sub{font-size:0.72rem;color:var(--text-muted);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.live-badge{display:flex;align-items:center;gap:7px;background:var(--red-dim);border:1px solid rgba(248,81,73,0.3);border-radius:20px;padding:5px 12px;font-size:0.75rem;font-weight:600;color:var(--red)}
+.live-dot{width:7px;height:7px;background:var(--red);border-radius:50%;animation:pulse 1.8s ease infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.85)}}
+.refresh-btn{display:flex;align-items:center;gap:7px;padding:7px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:pointer;font-size:0.78rem;font-weight:600;transition:var(--transition);background:var(--bg-elevated);color:var(--text-primary)}
+.refresh-btn:hover{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+.refresh-btn.spinning svg{animation:spin 0.8s linear infinite}
+
+/* FILTER BAR */
+.filter-bar{background:var(--bg-surface);border-bottom:1px solid var(--border-muted);padding:12px 32px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:68px;z-index:99;backdrop-filter:blur(12px)}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-label{font-size:0.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;white-space:nowrap}
+.filter-select{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:0.82rem;color:var(--text-primary);cursor:pointer;outline:none;transition:var(--transition);min-width:130px}
+.filter-select:hover,.filter-select:focus{border-color:var(--blue)}
+.filter-sep{width:1px;height:24px;background:var(--border)}
+.filter-clear-btn{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--red);background:transparent;color:var(--red);font-size:0.75rem;font-weight:600;cursor:pointer;transition:var(--transition)}
+.filter-clear-btn:hover{background:var(--red-dim)}
+
+/* MAIN */
+.main{padding:24px 32px;max-width:1700px;margin:0 auto}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;margin-top:28px}
+.section-header h2{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted)}
+.section-line{flex:1;height:1px;background:var(--border-muted)}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:8px}
+.kpi-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;transition:var(--transition);position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-color,var(--blue));border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.kpi-card::after{content:'';position:absolute;top:-30px;right:-20px;width:80px;height:80px;border-radius:50%;background:var(--accent-color,var(--blue));opacity:0.06;transition:var(--transition)}
+.kpi-card:hover{border-color:var(--accent-color,var(--blue));transform:translateY(-2px);box-shadow:var(--shadow)}
+.kpi-card.c-blue{--accent-color:var(--blue)}
+.kpi-card.c-red{--accent-color:var(--red)}
+.kpi-card.c-green{--accent-color:var(--green)}
+.kpi-card.c-orange{--accent-color:var(--orange)}
+.kpi-card.c-purple{--accent-color:var(--purple)}
+.kpi-card.c-cyan{--accent-color:var(--cyan)}
+.kpi-icon{font-size:1.3rem;margin-bottom:10px}
+.kpi-label{font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px}
+.kpi-value{font-size:1.9rem;font-weight:800;color:var(--text-primary);line-height:1.1;margin-top:3px}
+.kpi-sub{font-size:0.72rem;color:var(--text-muted);margin-top:5px}
+.kpi-pct{font-size:0.75rem;font-weight:700;margin-top:6px}
+
+/* ACPT SUMMARY CARDS */
+.acpt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:8px}
+.acpt-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;transition:var(--transition);cursor:pointer;position:relative;overflow:hidden}
+.acpt-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.acpt-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.acpt-card.agent::before{background:var(--red)}
+.acpt-card.agent{border-top:none}
+.acpt-card.agent:hover{border-color:var(--red)}
+.acpt-card.customer::before{background:var(--blue)}
+.acpt-card.customer:hover{border-color:var(--blue)}
+.acpt-card.process::before{background:var(--orange)}
+.acpt-card.process:hover{border-color:var(--orange)}
+.acpt-card.tech::before{background:var(--purple)}
+.acpt-card.tech:hover{border-color:var(--purple)}
+.acpt-letter{font-size:2.2rem;font-weight:900;line-height:1;margin-bottom:6px}
+.acpt-card.agent .acpt-letter{color:var(--red)}
+.acpt-card.customer .acpt-letter{color:var(--blue)}
+.acpt-card.process .acpt-letter{color:var(--orange)}
+.acpt-card.tech .acpt-letter{color:var(--purple)}
+.acpt-name{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px}
+.acpt-count{font-size:2rem;font-weight:800;color:var(--text-primary)}
+.acpt-pct{font-size:0.8rem;color:var(--text-secondary);margin-top:4px}
+.acpt-drill-hint{font-size:0.65rem;color:var(--text-muted);margin-top:10px;display:flex;align-items:center;gap:4px}
+.acpt-bar{height:3px;border-radius:2px;margin-top:12px}
+.acpt-card.agent .acpt-bar{background:var(--red)}
+.acpt-card.customer .acpt-bar{background:var(--blue)}
+.acpt-card.process .acpt-bar{background:var(--orange)}
+.acpt-card.tech .acpt-bar{background:var(--purple)}
+
+/* DRILLDOWN PANEL */
+.drilldown-panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;margin-bottom:16px;display:none;animation:fadeIn 0.25s ease}
+.drilldown-panel.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.drilldown-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.drilldown-title{font-size:0.9rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px}
+.drilldown-close{background:var(--bg-elevated);border:1px solid var(--border);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text-muted);transition:var(--transition)}
+.drilldown-close:hover{color:var(--red);border-color:var(--red)}
+.drilldown-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.drilldown-section{background:var(--bg-elevated);border:1px solid var(--border-muted);border-radius:var(--radius-md);padding:14px}
+.drilldown-section h4{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:12px}
+.reason-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-muted)}
+.reason-item:last-child{border-bottom:none}
+.reason-name{flex:1;font-size:0.82rem;color:var(--text-primary)}
+.reason-count{font-size:0.82rem;font-weight:700;color:var(--text-primary);min-width:32px;text-align:right}
+.reason-pct{font-size:0.72rem;color:var(--text-muted);min-width:45px;text-align:right}
+.reason-bar-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;max-width:80px}
+.reason-bar-fill{height:100%;border-radius:2px}
+
+/* CHART CARDS */
+.chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.chart-grid-3{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.chart-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;display:flex;flex-direction:column;transition:var(--transition)}
+.chart-card:hover{border-color:rgba(88,166,255,0.3)}
+.chart-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px}
+.chart-card-header h3{font-size:0.88rem;font-weight:700;color:var(--text-primary)}
+.chart-sub{font-size:0.72rem;color:var(--text-muted);margin-bottom:14px}
+.chart-container{flex:1;position:relative;min-height:230px}
+
+/* STS / RTC TABLE */
+.table-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.table-header h3{font-size:0.88rem;font-weight:700;color:var(--text-primary)}
+.table-wrap{overflow-x:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:0.8rem}
+.data-table thead th{background:var(--bg-elevated);padding:9px 14px;text-align:left;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.data-table tbody tr{border-bottom:1px solid var(--border-muted);transition:var(--transition)}
+.data-table tbody tr:last-child{border-bottom:none}
+.data-table tbody tr:hover{background:var(--bg-hover)}
+.data-table td{padding:9px 14px;vertical-align:middle}
+.tag-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:12px;font-size:0.7rem;font-weight:700;border:1px solid transparent}
+.tag-agent{background:var(--red-dim);color:var(--red);border-color:rgba(248,81,73,0.3)}
+.tag-customer{background:var(--blue-dim);color:var(--blue);border-color:rgba(88,166,255,0.3)}
+.tag-process{background:var(--orange-dim);color:var(--orange);border-color:rgba(227,179,65,0.3)}
+.tag-tech{background:var(--purple-dim);color:var(--purple);border-color:rgba(188,140,255,0.3)}
+
+/* VOICE SUMMARY */
+.voice-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:16px}
+.voice-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.voice-title{font-size:0.88rem;font-weight:700;color:var(--text-primary)}
+.voice-count{font-size:0.72rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);padding:3px 10px;border-radius:12px}
+.summarize-btn{display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:var(--radius-sm);border:1px solid rgba(88,166,255,0.4);background:var(--blue-dim);color:var(--blue);font-size:0.82rem;font-weight:600;cursor:pointer;transition:var(--transition)}
+.summarize-btn:hover{background:rgba(88,166,255,0.25);border-color:var(--blue)}
+.summarize-btn:disabled{opacity:0.5;cursor:not-allowed}
+.voice-voices{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:16px;max-height:280px;overflow-y:auto}
+.voice-item{background:var(--bg-elevated);border:1px solid var(--border-muted);border-radius:var(--radius-sm);padding:12px;font-size:0.8rem;color:var(--text-secondary);line-height:1.5;border-left:3px solid var(--blue)}
+.voice-summary-box{background:var(--bg-elevated);border:1px solid rgba(88,166,255,0.3);border-radius:var(--radius-md);padding:18px;min-height:80px}
+.voice-summary-text{font-size:0.85rem;color:var(--text-primary);line-height:1.7}
+.voice-summary-loading{display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:0.82rem}
+.ai-spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+.voice-summary-placeholder{color:var(--text-muted);font-size:0.82rem;font-style:italic}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;position:relative;animation:fadeIn 0.2s ease}
+.modal-close{position:absolute;top:14px;right:14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text-muted);transition:var(--transition)}
+.modal-close:hover{color:var(--red);border-color:var(--red)}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{padding:12px 18px;border-radius:var(--radius-md);font-size:0.82rem;font-weight:600;animation:slideIn 0.3s ease;box-shadow:var(--shadow-lg)}
+.toast-success{background:var(--green-dim);border:1px solid rgba(63,185,80,0.4);color:var(--green)}
+.toast-info{background:var(--blue-dim);border:1px solid rgba(88,166,255,0.3);color:var(--blue)}
+.toast-error{background:var(--red-dim);border:1px solid rgba(248,81,73,0.3);color:var(--red)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+.footer{text-align:center;padding:24px;color:var(--text-muted);font-size:0.72rem;border-top:1px solid var(--border-muted)}
+.empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border)}
+.page-info{font-size:0.75rem;color:var(--text-muted)}
+.page-btns{display:flex;gap:4px}
+.page-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-secondary);font-size:0.75rem;cursor:pointer;transition:var(--transition)}
+.page-btn:hover,.page-btn.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+.page-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+@media(max-width:900px){
+  .acpt-grid{grid-template-columns:1fr 1fr}
+  .chart-grid-2,.chart-grid-3{grid-template-columns:1fr}
+  .drilldown-grid{grid-template-columns:1fr}
+  .header,.filter-bar,.main{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingOverlay">
+  <div class="loader-ring"></div>
+  <div class="loader-text">DSAT ACPT DASHBOARD</div>
+  <div class="loader-sub" id="loadingMsg">Connecting to Google Sheets…</div>
+  <div class="loader-progress"><div class="loader-progress-bar" id="loadBar"></div></div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">📊</div>
+    <div>
+      <div class="header-title">DSAT ACPT Analysis</div>
+      <div class="header-sub">Agent · Customer · Process / Product · Technology</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div>Live</div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-label">Channel</span>
+    <select class="filter-select" id="fChannel" onchange="applyFilters()">
+      <option value="all">All Channels</option>
+      <option value="121">Call Center (121)</option>
+      <option value="livechat">Live Chat</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <span class="filter-label">Month</span>
+    <select class="filter-select" id="fMonth" onchange="onMonthChange()">
+      <option value="all">All Months</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <span class="filter-label">Week</span>
+    <select class="filter-select" id="fWeek" onchange="applyFilters()">
+      <option value="all">All Weeks</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <span class="filter-label">ACPT</span>
+    <select class="filter-select" id="fACPT" onchange="applyFilters()">
+      <option value="all">All Tags</option>
+      <option value="Agent">Agent</option>
+      <option value="Customer">Customer</option>
+      <option value="Process / Product">Process / Product</option>
+      <option value="Technology">Technology</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <span class="filter-label">Category</span>
+    <select class="filter-select" id="fCategory" onchange="applyFilters()">
+      <option value="all">All Categories</option>
+    </select>
+  </div>
+  <button class="filter-clear-btn" onclick="clearFilters()">✕ Clear</button>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="mainContent" style="display:none">
+
+  <!-- SAMPLE SIZE -->
+  <div class="section-header"><h2>📋 Overview</h2><div class="section-line"></div></div>
+  <div class="kpi-grid">
+    <div class="kpi-card c-blue">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Total Sample</div>
+      <div class="kpi-value" id="kTotal">—</div>
+      <div class="kpi-sub" id="kTotalSub">All time</div>
+    </div>
+    <div class="kpi-card c-cyan">
+      <div class="kpi-icon">📞</div>
+      <div class="kpi-label">Call Center (121)</div>
+      <div class="kpi-value" id="k121">—</div>
+      <div class="kpi-sub">DSAT ACPT records</div>
+    </div>
+    <div class="kpi-card c-purple">
+      <div class="kpi-icon">💬</div>
+      <div class="kpi-label">Live Chat</div>
+      <div class="kpi-value" id="kLC">—</div>
+      <div class="kpi-sub">DSAT ACPT records</div>
+    </div>
+    <div class="kpi-card c-orange">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">Filtered Sample</div>
+      <div class="kpi-value" id="kFiltered">—</div>
+      <div class="kpi-sub">Current filter view</div>
+    </div>
+  </div>
+
+  <!-- ACPT SUMMARY -->
+  <div class="section-header"><h2>🎯 ACPT Distribution — Click any card to drilldown</h2><div class="section-line"></div></div>
+  <div class="acpt-grid">
+    <div class="acpt-card agent" onclick="toggleDrilldown('Agent')">
+      <div class="acpt-letter">A</div>
+      <div class="acpt-name">Agent</div>
+      <div class="acpt-count" id="acptAgentCount">—</div>
+      <div class="acpt-pct" id="acptAgentPct">—</div>
+      <div class="acpt-bar" id="acptAgentBar"></div>
+      <div class="acpt-drill-hint">▼ Click to drilldown</div>
+    </div>
+    <div class="acpt-card customer" onclick="toggleDrilldown('Customer')">
+      <div class="acpt-letter">C</div>
+      <div class="acpt-name">Customer</div>
+      <div class="acpt-count" id="acptCustomerCount">—</div>
+      <div class="acpt-pct" id="acptCustomerPct">—</div>
+      <div class="acpt-bar" id="acptCustomerBar"></div>
+      <div class="acpt-drill-hint">▼ Click to drilldown</div>
+    </div>
+    <div class="acpt-card process" onclick="toggleDrilldown('Process / Product')">
+      <div class="acpt-letter">P</div>
+      <div class="acpt-name">Process / Product</div>
+      <div class="acpt-count" id="acptProcessCount">—</div>
+      <div class="acpt-pct" id="acptProcessPct">—</div>
+      <div class="acpt-bar" id="acptProcessBar"></div>
+      <div class="acpt-drill-hint">▼ Click to drilldown</div>
+    </div>
+    <div class="acpt-card tech" onclick="toggleDrilldown('Technology')">
+      <div class="acpt-letter">T</div>
+      <div class="acpt-name">Technology</div>
+      <div class="acpt-count" id="acptTechCount">—</div>
+      <div class="acpt-pct" id="acptTechPct">—</div>
+      <div class="acpt-bar" id="acptTechBar"></div>
+      <div class="acpt-drill-hint">▼ Click to drilldown</div>
+    </div>
+  </div>
+
+  <!-- DRILLDOWN PANEL -->
+  <div class="drilldown-panel" id="drilldownPanel">
+    <div class="drilldown-header">
+      <div class="drilldown-title" id="drilldownTitle">Drilldown</div>
+      <div class="drilldown-close" onclick="closeDrilldown()">✕</div>
+    </div>
+    <div class="drilldown-grid" id="drilldownGrid"></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="section-header"><h2>📈 ACPT Analytics</h2><div class="section-line"></div></div>
+  <div class="chart-grid-3">
+    <div class="chart-card">
+      <div class="chart-card-header"><h3>ACPT Distribution</h3></div>
+      <div class="chart-sub">Share of each ACPT tag in filtered data</div>
+      <div class="chart-container"><canvas id="cACPTPie"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header"><h3>Monthly Trend</h3></div>
+      <div class="chart-sub">ACPT tag volumes by month</div>
+      <div class="chart-container"><canvas id="cMonthTrend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header"><h3>Channel Split</h3></div>
+      <div class="chart-sub">Call Center vs Live Chat</div>
+      <div class="chart-container"><canvas id="cChannelSplit"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-grid-2">
+    <div class="chart-card">
+      <div class="chart-card-header"><h3>DSAT Reason Breakdown</h3></div>
+      <div class="chart-sub">Top DSAT reasons across all ACPT tags</div>
+      <div class="chart-container"><canvas id="cReasonBar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header"><h3>Category (STS) Distribution</h3></div>
+      <div class="chart-sub">Top STS/RTC categories driving DSATs</div>
+      <div class="chart-container"><canvas id="cCatBar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- STS/RTC TABLE -->
+  <div class="section-header"><h2>📂 STS / RTC Breakdown</h2><div class="section-line"></div></div>
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Category & Sub-Category Analysis <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem" id="stsTableCount"></span></h3>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Sub-Category (Topic)</th>
+            <th>ACPT Tag</th>
+            <th>Count</th>
+            <th>% of Total</th>
+          </tr>
+        </thead>
+        <tbody id="stsTableBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div class="page-info" id="stsPageInfo"></div>
+      <div class="page-btns" id="stsPageBtns"></div>
+    </div>
+  </div>
+
+  <!-- CUSTOMER VOICE SUMMARY -->
+  <div class="section-header"><h2>🗣️ Customer Voice (Bangla / English)</h2><div class="section-line"></div></div>
+  <div class="voice-card">
+    <div class="voice-header">
+      <div>
+        <div class="voice-title">Customer Feedback Compilation</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Collected from columns F, G, S, T — summarized by AI</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="voice-count" id="voiceCount">0 voices</span>
+        <button class="summarize-btn" id="summarizeBtn" onclick="summarizeVoices()">
+          ✨ Summarize with AI
+        </button>
+      </div>
+    </div>
+    <div class="voice-voices" id="voiceItems"></div>
+    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">AI Summary</div>
+    <div class="voice-summary-box">
+      <div id="voiceSummaryContent">
+        <div class="voice-summary-placeholder">Click "Summarize with AI" to generate a summary of all customer voices in the current filter. Supports both Bangla and English.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer" id="footerEl" style="display:none">DSAT ACPT Analysis Dashboard · Grameenphone · Call Center & Live Chat Quality</div>
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+// Published spreadsheet ID (from "Publish to web" in Google Sheets)
+const PUB_ID = '2PACX-1vRn1mBfKueWkJIWsfoKIpRziQexpioBAfUSEMNyvkJv_RcGvsXcKE4lpmFFz2urlSbyNraCGe-5T-Ru';
+const CSV_URL = (gid) => `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${gid}`;
+
+// Column indices (0-based) based on the sheet structure
+const COL = {
+  timestamp: 0,      // A
+  name: 1,           // B
+  agentId: 2,        // C
+  msisdn: 3,         // D
+  callbackDate: 4,   // E
+  colF: 5,           // F - Bangla script opener
+  customerVoice1: 6, // G - DSAT reason (Bangla)
+  customerVoice2: 7, // H - How service should be
+  acptTag: 8,        // I - ACPT Tagging
+  agentReason: 9,    // J - Agent DSAT Reason
+  agentSubCat: 10,   // K - Sub Category
+  customerReason: 11,// L - Customer DSAT Reason
+  customerSubCat: 12,// M - Sub Category
+  processReason: 13, // N - Process/Product DSAT Reason
+  processSubCat: 14, // O - Sub Category
+  techReason: 15,    // P - Technology DSAT Reason
+  techSubCat: 16,    // Q - Sub Category
+  satisfied: 17,     // R - Satisfaction question
+  voiceS: 18,        // S - If Yes/No feedback
+  voiceT: 19,        // T - Improvement suggestion
+  topicName: 20,     // U - Topic Name (Sub-Category)
+  category: 21,      // V - Category (main STS)
+  closingW: 22,      // W - Closing
+};
+
+const ACPT_COLORS = {
+  'Agent':           '#f85149',
+  'Customer':        '#58a6ff',
+  'Process / Product':'#e3b341',
+  'Technology':      '#bc8cff',
+};
+
+const DSAT_REASONS = {
+  'Agent':            ['Agent Behavior','Agent Knowledge Gap','Casual Approach','Lack of Efficiency','Lack of Attentiveness'],
+  'Customer':         ['Customer Understanding Gap','Mistakenly Provided DSAT','Incomplete Interaction'],
+  'Process / Product':['Product Unavailability','Product Complexity','Product Tariff Info','Verification Process','Complaint Solution','Other Non-Service'],
+  'Technology':       ['Internet','Network Problem','Tool Complexity','System Challenge','SMS Connectivity','Downtime'],
+};
+
+const REASON_COL = {
+  'Agent':            COL.agentReason,
+  'Customer':         COL.customerReason,
+  'Process / Product':COL.processReason,
+  'Technology':       COL.techReason,
+};
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let allRows121 = [];
+let allRowsLC  = [];
+let filteredRows = [];
+let charts = {};
+let currentDrilldown = null;
+let stsPage = 1;
+const STS_PAGE_SIZE = 20;
+
+// ═══════════════════════════════════════════
+// LOADING
+// ═══════════════════════════════════════════
+function setProgress(pct, msg) {
+  document.getElementById('loadBar').style.width = pct + '%';
+  if (msg) document.getElementById('loadingMsg').textContent = msg;
+}
+
+// ═══════════════════════════════════════════
+// CSV PARSER  (handles quoted fields & newlines)
+// ═══════════════════════════════════════════
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else inQuote = false;
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else { field += ch; }
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// ═══════════════════════════════════════════
+// FETCH via published CSV
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// FETCH via published CSV
+// ═══════════════════════════════════════════
+
+// Try to fetch a gid; returns { rows, isHTML } or throws
+async function fetchSheetCSV(gid) {
+  const res = await fetch(CSV_URL(gid));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const isHTML = text.trimStart().startsWith('<!');
+  if (isHTML) return { rows: [], isHTML: true };
+  return { rows: parseCSV(text), isHTML: false };
+}
+
+function parseRows(rawRows) {
+  return rawRows.slice(1).filter(r => r[COL.acptTag] && String(r[COL.acptTag]).trim());
+}
+
+// ── GID Setup UI ──────────────────────────────────────────────────────────────
+// Google Sheets real tab gids are large unique numbers that can't be guessed.
+// We show a one-time setup screen so the user can paste them in.
+// Once saved to localStorage they're reused on every load.
+
+const GID_121 = '781246663';
+const GID_LC  = '32686330';
+
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('footerEl').style.display = 'none';
+
+  try {
+    // ── Fetch 121 tab ─────────────────────────────────────────────────────
+    setProgress(20, 'Loading Call Center (121) data…');
+    const r121 = await fetchSheetCSV(GID_121);
+    if (r121.isHTML) throw new Error('121 tab returned an error page. Make sure the sheet is published to the web.');
+    allRows121 = parseRows(r121.rows);
+
+    // ── Fetch Live Chat tab ───────────────────────────────────────────────
+    setProgress(55, 'Loading Live Chat data…');
+    try {
+      const rLC = await fetchSheetCSV(GID_LC);
+      allRowsLC = rLC.isHTML ? [] : parseRows(rLC.rows);
+    } catch(e) {
+      console.warn('Live Chat tab failed:', e);
+      allRowsLC = [];
+    }
+
+    setProgress(85, 'Processing data…');
+    populateFilters();
+    applyFilters();
+    setProgress(100, 'Done!');
+    setTimeout(() => {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.display = 'block';
+      document.getElementById('footerEl').style.display = 'block';
+      showToast(`Loaded — 121: ${allRows121.length} rows, Live Chat: ${allRowsLC.length} rows`, 'success');
+    }, 400);
+
+  } catch(e) {
+    document.getElementById('loadingMsg').textContent = '⚠️ ' + e.message;
+    showToast('Error: ' + e.message, 'error');
+    console.error(e);
+    setTimeout(() => {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.display = 'block';
+      document.getElementById('footerEl').style.display = 'block';
+    }, 2500);
+  }
+  btn.classList.remove('spinning');
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════
+function populateFilters() {
+  const allRows = [...allRows121.map(r=>({...r, _channel:'121'})), ...allRowsLC.map(r=>({...r, _channel:'livechat'}))];
+
+  // Months
+  const months = new Set();
+  allRows.forEach(r => {
+    const d = parseDate(r[COL.callbackDate]);
+    if (d) months.add(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  });
+  const monthSel = document.getElementById('fMonth');
+  monthSel.innerHTML = '<option value="all">All Months</option>';
+  [...months].sort().forEach(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(+y, +mo-1, 1).toLocaleString('default', {month:'long', year:'numeric'});
+    monthSel.innerHTML += `<option value="${m}">${label}</option>`;
+  });
+
+  // Categories
+  const cats = new Set();
+  allRows.forEach(r => { if (r[COL.category]) cats.add(String(r[COL.category]).trim()); });
+  const catSel = document.getElementById('fCategory');
+  catSel.innerHTML = '<option value="all">All Categories</option>';
+  [...cats].sort().forEach(c => { catSel.innerHTML += `<option value="${c}">${c}</option>`; });
+}
+
+function onMonthChange() {
+  const month = document.getElementById('fMonth').value;
+  const weekSel = document.getElementById('fWeek');
+  weekSel.innerHTML = '<option value="all">All Weeks</option>';
+  if (month !== 'all') {
+    const allRows = getChannelRows();
+    const weeks = new Set();
+    allRows.forEach(r => {
+      const d = parseDate(r[COL.callbackDate]);
+      if (!d) return;
+      const rowMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+      if (rowMonth === month) {
+        weeks.add(getWeekOfMonth(d));
+      }
+    });
+    [...weeks].sort((a,b)=>a-b).forEach(w => {
+      weekSel.innerHTML += `<option value="${w}">Week ${w}</option>`;
+    });
+  }
+  applyFilters();
+}
+
+function tagRows(rows, ch) {
+  // CSV rows are arrays; attach _ch as a property on the array
+  return rows.map(r => { const a = [...r]; a._ch = ch; return a; });
+}
+
+function getChannelRows() {
+  const ch = document.getElementById('fChannel').value;
+  if (ch === '121') return tagRows(allRows121, '121');
+  if (ch === 'livechat') return tagRows(allRowsLC, 'livechat');
+  return [...tagRows(allRows121, '121'), ...tagRows(allRowsLC, 'livechat')];
+}
+
+function applyFilters() {
+  const ch   = document.getElementById('fChannel').value;
+  const month = document.getElementById('fMonth').value;
+  const week  = document.getElementById('fWeek').value;
+  const acpt  = document.getElementById('fACPT').value;
+  const cat   = document.getElementById('fCategory').value;
+
+  let rows = getChannelRows();
+
+  if (month !== 'all') {
+    rows = rows.filter(r => {
+      const d = parseDate(r[COL.callbackDate]);
+      if (!d) return false;
+      return (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')) === month;
+    });
+  }
+  if (week !== 'all') {
+    rows = rows.filter(r => {
+      const d = parseDate(r[COL.callbackDate]);
+      if (!d) return false;
+      return getWeekOfMonth(d) === +week;
+    });
+  }
+  if (acpt !== 'all') rows = rows.filter(r => String(r[COL.acptTag]).trim() === acpt);
+  if (cat !== 'all')  rows = rows.filter(r => String(r[COL.category] || '').trim() === cat);
+
+  filteredRows = rows;
+  renderDashboard();
+}
+
+function clearFilters() {
+  document.getElementById('fChannel').value = 'all';
+  document.getElementById('fMonth').value = 'all';
+  document.getElementById('fWeek').innerHTML = '<option value="all">All Weeks</option>';
+  document.getElementById('fACPT').value = 'all';
+  document.getElementById('fCategory').value = 'all';
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function renderDashboard() {
+  const total   = allRows121.length + allRowsLC.length;
+  const filtered = filteredRows.length;
+
+  document.getElementById('kTotal').textContent    = total.toLocaleString();
+  document.getElementById('k121').textContent      = allRows121.length.toLocaleString();
+  document.getElementById('kLC').textContent       = allRowsLC.length.toLocaleString();
+  document.getElementById('kFiltered').textContent = filtered.toLocaleString();
+
+  const ch = document.getElementById('fChannel').value;
+  const mLabel = document.getElementById('fMonth').value;
+  document.getElementById('kTotalSub').textContent = mLabel === 'all' ? 'All time holistic' : 'All time holistic';
+
+  renderACPTCards();
+  renderCharts();
+  renderStsTable();
+  renderVoices();
+  if (currentDrilldown) renderDrilldown(currentDrilldown);
+}
+
+// ═══════════════════════════════════════════
+// ACPT CARDS
+// ═══════════════════════════════════════════
+function renderACPTCards() {
+  const total = filteredRows.length;
+  const tags = ['Agent','Customer','Process / Product','Technology'];
+  const counts = {};
+  tags.forEach(t => counts[t] = 0);
+  filteredRows.forEach(r => {
+    const tag = String(r[COL.acptTag]).trim();
+    if (counts[tag] !== undefined) counts[tag]++;
+  });
+
+  const idMap = { 'Agent':'Agent','Customer':'Customer','Process / Product':'Process','Technology':'Tech' };
+  tags.forEach(tag => {
+    const id = idMap[tag];
+    const cnt = counts[tag];
+    const pct = total ? (cnt/total*100).toFixed(1) : '0.0';
+    document.getElementById(`acpt${id}Count`).textContent = cnt.toLocaleString();
+    document.getElementById(`acpt${id}Pct`).textContent   = `${pct}% of filtered`;
+  });
+}
+
+// ═══════════════════════════════════════════
+// DRILLDOWN
+// ═══════════════════════════════════════════
+function toggleDrilldown(tag) {
+  if (currentDrilldown === tag) {
+    closeDrilldown();
+    return;
+  }
+  currentDrilldown = tag;
+  renderDrilldown(tag);
+  document.getElementById('drilldownPanel').classList.add('open');
+  document.getElementById('drilldownPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function closeDrilldown() {
+  currentDrilldown = null;
+  document.getElementById('drilldownPanel').classList.remove('open');
+}
+
+function renderDrilldown(tag) {
+  const emojis = {'Agent':'🔴','Customer':'🔵','Process / Product':'🟡','Technology':'🟣'};
+  document.getElementById('drilldownTitle').textContent = `${emojis[tag] || ''} ${tag} — DSAT Breakdown`;
+
+  const rows = filteredRows.filter(r => String(r[COL.acptTag]).trim() === tag);
+  const total = rows.length;
+  const color = ACPT_COLORS[tag] || '#58a6ff';
+
+  // DSAT Reason counts
+  const reasonCol = REASON_COL[tag];
+  const reasonCounts = {};
+  rows.forEach(r => {
+    const v = String(r[reasonCol] || '').trim();
+    if (v) reasonCounts[v] = (reasonCounts[v] || 0) + 1;
+  });
+
+  // Sub-category counts
+  const subColMap = {'Agent':COL.agentSubCat,'Customer':COL.customerSubCat,'Process / Product':COL.processSubCat,'Technology':COL.techSubCat};
+  const subCol = subColMap[tag];
+  const subCounts = {};
+  rows.forEach(r => {
+    const v = String(r[subCol] || '').trim();
+    if (v) subCounts[v] = (subCounts[v] || 0) + 1;
+  });
+
+  function buildList(counts, totalRef) {
+    const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    if (!sorted.length) return '<div class="empty-state" style="padding:20px">No data</div>';
+    const maxVal = sorted[0][1];
+    return sorted.map(([name, cnt]) => {
+      const pct = totalRef ? (cnt/totalRef*100).toFixed(1) : '0';
+      const barW = maxVal ? Math.round(cnt/maxVal*100) : 0;
+      return `<div class="reason-item">
+        <div class="reason-name">${name}</div>
+        <div class="reason-bar-track"><div class="reason-bar-fill" style="width:${barW}%;background:${color}"></div></div>
+        <div class="reason-count">${cnt}</div>
+        <div class="reason-pct">${pct}%</div>
+      </div>`;
+    }).join('');
+  }
+
+  const expectedReasons = DSAT_REASONS[tag] || [];
+  expectedReasons.forEach(r => { if (!reasonCounts[r]) reasonCounts[r] = 0; });
+  // Filter out zeros for cleaner display
+  const filtReasons = Object.fromEntries(Object.entries(reasonCounts).filter(([,v])=>v>0));
+
+  document.getElementById('drilldownGrid').innerHTML = `
+    <div class="drilldown-section">
+      <h4>DSAT Reason (${total} total)</h4>
+      ${buildList(filtReasons, total)}
+    </div>
+    <div class="drilldown-section">
+      <h4>Sub-Category / Topic (STS)</h4>
+      ${buildList(subCounts, total)}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function renderCharts() {
+  renderACPTPie();
+  renderMonthTrend();
+  renderChannelSplit();
+  renderReasonBar();
+  renderCatBar();
+}
+
+function renderACPTPie() {
+  destroyChart('acptPie');
+  const tags = ['Agent','Customer','Process / Product','Technology'];
+  const counts = tags.map(t => filteredRows.filter(r=>String(r[COL.acptTag]).trim()===t).length);
+  const ctx = document.getElementById('cACPTPie').getContext('2d');
+  charts['acptPie'] = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels: tags,
+      datasets:[{data:counts, backgroundColor:tags.map(t=>ACPT_COLORS[t]), borderColor:'#161b22', borderWidth:3, hoverOffset:8}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{color:'#8b949e',padding:12,font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} (${filteredRows.length?((ctx.raw/filteredRows.length)*100).toFixed(1):'0'}%)`}}}
+    }
+  });
+}
+
+function renderMonthTrend() {
+  destroyChart('monthTrend');
+  const allRows = getChannelRows();
+  const monthMap = {};
+  const acptTags = ['Agent','Customer','Process / Product','Technology'];
+  allRows.forEach(r => {
+    const d = parseDate(r[COL.callbackDate]);
+    if (!d) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    if (!monthMap[key]) monthMap[key] = {};
+    const tag = String(r[COL.acptTag]).trim();
+    monthMap[key][tag] = (monthMap[key][tag]||0)+1;
+  });
+  const months = Object.keys(monthMap).sort();
+  const labels = months.map(m => {
+    const [y,mo] = m.split('-');
+    return new Date(+y,+mo-1,1).toLocaleString('default',{month:'short',year:'2-digit'});
+  });
+  const colors = [ACPT_COLORS['Agent'],ACPT_COLORS['Customer'],ACPT_COLORS['Process / Product'],ACPT_COLORS['Technology']];
+  const ctx = document.getElementById('cMonthTrend').getContext('2d');
+  charts['monthTrend'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets: acptTags.map((tag,i)=>({
+        label:tag, data:months.map(m=>(monthMap[m]||{})[tag]||0),
+        backgroundColor:colors[i]+'99', borderColor:colors[i], borderWidth:1.5, borderRadius:4
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{color:'#8b949e',padding:8,font:{size:10}}}},
+      scales:{
+        x:{stacked:true,ticks:{color:'#6e7681',font:{size:10}},grid:{color:'#21262d'}},
+        y:{stacked:true,ticks:{color:'#6e7681',font:{size:10}},grid:{color:'#21262d'}}
+      }
+    }
+  });
+}
+
+function renderChannelSplit() {
+  destroyChart('channelSplit');
+  const n121 = filteredRows.filter(r=>r._ch==='121').length;
+  const nLC  = filteredRows.filter(r=>r._ch==='livechat').length;
+  const ctx = document.getElementById('cChannelSplit').getContext('2d');
+  charts['channelSplit'] = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels:['Call Center (121)','Live Chat'],
+      datasets:[{data:[n121,nLC],backgroundColor:['#79c0ff','#bc8cff'],borderColor:'#161b22',borderWidth:3,hoverOffset:6}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{color:'#8b949e',padding:12,font:{size:11}}}}
+    }
+  });
+}
+
+function renderReasonBar() {
+  destroyChart('reasonBar');
+  const reasonCounts = {};
+  filteredRows.forEach(r => {
+    const tag = String(r[COL.acptTag]).trim();
+    const col = REASON_COL[tag];
+    if (col !== undefined) {
+      const v = String(r[col] || '').trim();
+      if (v) reasonCounts[v] = (reasonCounts[v]||0)+1;
+    }
+  });
+  const sorted = Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const ctx = document.getElementById('cReasonBar').getContext('2d');
+  charts['reasonBar'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: sorted.map(([k])=>k),
+      datasets:[{
+        label:'Count', data:sorted.map(([,v])=>v),
+        backgroundColor:'#58a6ff88', borderColor:'#58a6ff', borderWidth:1.5, borderRadius:4
+      }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#6e7681',font:{size:10}},grid:{color:'#21262d'}},
+        y:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}}
+      }
+    }
+  });
+}
+
+function renderCatBar() {
+  destroyChart('catBar');
+  const catCounts = {};
+  filteredRows.forEach(r => {
+    const v = String(r[COL.category] || '').trim();
+    if (v) catCounts[v] = (catCounts[v]||0)+1;
+  });
+  const sorted = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const ctx = document.getElementById('cCatBar').getContext('2d');
+  charts['catBar'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: sorted.map(([k])=>k),
+      datasets:[{
+        label:'Count', data:sorted.map(([,v])=>v),
+        backgroundColor:'#e3b34188', borderColor:'#e3b341', borderWidth:1.5, borderRadius:4
+      }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#6e7681',font:{size:10}},grid:{color:'#21262d'}},
+        y:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}}
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// STS TABLE
+// ═══════════════════════════════════════════
+function renderStsTable() {
+  // Group by category + sub-category + acpt tag
+  const map = {};
+  filteredRows.forEach(r => {
+    const cat  = String(r[COL.category] || '').trim() || '—';
+    const sub  = String(r[COL.topicName] || '').trim() || '—';
+    const acpt = String(r[COL.acptTag] || '').trim() || '—';
+    const key  = `${cat}|||${sub}|||${acpt}`;
+    map[key] = (map[key]||0)+1;
+  });
+
+  const entries = Object.entries(map).map(([k,v]) => {
+    const [cat,sub,acpt] = k.split('|||');
+    return {cat,sub,acpt,count:v};
+  }).sort((a,b)=>b.count-a.count);
+
+  const total = filteredRows.length;
+  const totalPages = Math.ceil(entries.length / STS_PAGE_SIZE);
+  const page = Math.min(stsPage, totalPages || 1);
+  const slice = entries.slice((page-1)*STS_PAGE_SIZE, page*STS_PAGE_SIZE);
+
+  document.getElementById('stsTableCount').textContent = `(${entries.length} combinations)`;
+
+  const acptBadge = tag => {
+    const cls = {'Agent':'tag-agent','Customer':'tag-customer','Process / Product':'tag-process','Technology':'tag-tech'}[tag] || '';
+    return `<span class="tag-badge ${cls}">${tag}</span>`;
+  };
+
+  document.getElementById('stsTableBody').innerHTML = slice.length
+    ? slice.map(e=>`<tr>
+        <td><strong>${e.cat}</strong></td>
+        <td style="color:var(--text-secondary)">${e.sub}</td>
+        <td>${acptBadge(e.acpt)}</td>
+        <td><strong>${e.count}</strong></td>
+        <td style="color:var(--text-muted)">${total?(e.count/total*100).toFixed(1):'0'}%</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty-state">No data for current filters</td></tr>';
+
+  document.getElementById('stsPageInfo').textContent = entries.length ? `Page ${page} of ${totalPages} · ${entries.length} rows` : '';
+  const btns = document.getElementById('stsPageBtns');
+  btns.innerHTML = '';
+  for (let p=1; p<=Math.min(totalPages,8); p++) {
+    const b = document.createElement('button');
+    b.className = 'page-btn' + (p===page?' active':'');
+    b.textContent = p;
+    b.onclick = () => { stsPage = p; renderStsTable(); };
+    btns.appendChild(b);
+  }
+}
+
+// ═══════════════════════════════════════════
+// CUSTOMER VOICES
+// ═══════════════════════════════════════════
+function renderVoices() {
+  const voices = [];
+  filteredRows.forEach(r => {
+    const v1 = String(r[COL.customerVoice1] || '').trim();
+    const v2 = String(r[COL.customerVoice2] || '').trim();
+    const s  = String(r[COL.voiceS] || '').trim();
+    const t  = String(r[COL.voiceT] || '').trim();
+    if (v1) voices.push(v1);
+    if (v2) voices.push(v2);
+    if (s) voices.push(s);
+    if (t) voices.push(t);
+  });
+
+  document.getElementById('voiceCount').textContent = `${voices.length} voices`;
+  const container = document.getElementById('voiceItems');
+  // Show up to 30 samples
+  const shown = voices.slice(0, 30);
+  container.innerHTML = shown.length
+    ? shown.map(v => `<div class="voice-item">${escHtml(v)}</div>`).join('')
+    : '<div class="empty-state">No customer voices in current filter</div>';
+
+  // Reset summary
+  document.getElementById('voiceSummaryContent').innerHTML =
+    '<div class="voice-summary-placeholder">Click "Summarize with AI" to generate a summary of all customer voices in the current filter. Supports both Bangla and English.</div>';
+}
+
+async function summarizeVoices() {
+  const voices = [];
+  filteredRows.forEach(r => {
+    [COL.customerVoice1, COL.customerVoice2, COL.voiceS, COL.voiceT].forEach(col => {
+      const v = String(r[col] || '').trim();
+      if (v) voices.push(v);
+    });
+  });
+
+  if (!voices.length) {
+    showToast('No customer voices to summarize', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('summarizeBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Summarizing…';
+
+  const summaryBox = document.getElementById('voiceSummaryContent');
+  summaryBox.innerHTML = '<div class="voice-summary-loading"><div class="ai-spinner"></div> Analyzing customer voices (Bangla & English)…</div>';
+
+  const sample = voices.slice(0, 80).join('\n---\n');
+  const prompt = `You are analyzing customer DSAT (dissatisfaction) feedback from a telecom call center and live chat in Bangladesh. The feedback may be in Bangla, English, or a mix of both.
+
+Below are ${voices.length} customer voice entries (showing up to 80 samples):
+
+${sample}
+
+Please provide a concise, structured summary in English covering:
+1. Top 3-4 recurring themes or complaints
+2. Most common agent-related issues (if any)
+3. Most common product/service issues (if any)
+4. Key customer expectations and suggestions
+5. One-line overall sentiment
+
+Keep the summary under 250 words. Write in clear professional English.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1000,
+        messages:[{role:'user', content:prompt}]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.map(b=>b.text||'').join('') || 'No summary generated.';
+    summaryBox.innerHTML = `<div class="voice-summary-text">${text.replace(/\n/g,'<br>')}</div>`;
+    showToast('Customer Voice summary generated', 'success');
+  } catch(e) {
+    summaryBox.innerHTML = '<div style="color:var(--red);font-size:0.82rem">Failed to generate summary. Please try again.</div>';
+    showToast('AI summary failed: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '✨ Summarize with AI';
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') {
+    // Google Sheets serial date
+    const ms = (v - 25569) * 86400000;
+    return new Date(ms);
+  }
+  const str = String(v);
+  // Try "M/D/YYYY H:MM:SS" or "M/D/YYYY"
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+
+function getWeekOfMonth(d) {
+  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+  return Math.ceil((d.getDate() + firstDay) / 7);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.textContent = msg;
+  t.appendChild(el);
+  setTimeout(() => el.remove(), 3800);
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', () => {});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
