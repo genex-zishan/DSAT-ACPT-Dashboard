@@ -1233,7 +1233,7 @@ Keep the summary under 250 words. Write in clear professional English.`;
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          model: 'llama-3.3-70b-versatile',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 1000,
           temperature: 0.4
