@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DSAT ACPT Dashboard</title>
+<title>DSAT ACPT Analysis Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -1167,11 +1167,17 @@ function saveApiKey() {
 }
 
 async function summarizeVoices() {
+  // Clear any leftover key from old Anthropic setup
+  const oldKey = localStorage.getItem(APIKEY_LS) || '';
+  if (oldKey && !oldKey.startsWith('AIza')) {
+    localStorage.removeItem(APIKEY_LS);
+  }
+
   const key = getApiKey();
   if (!key) {
     _pendingSummarize = true;
     document.getElementById('apikeyModal').classList.add('open');
-    document.getElementById('apikeyInput').focus();
+    setTimeout(() => document.getElementById('apikeyInput').focus(), 100);
     return;
   }
   doSummarize();
@@ -1214,8 +1220,10 @@ Please provide a concise, structured summary in English covering:
 
 Keep the summary under 250 words. Write in clear professional English.`;
 
+  const apiKey = getApiKey();
+  let errorMsg = '';
+
   try {
-    const apiKey = getApiKey();
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
@@ -1227,23 +1235,32 @@ Keep the summary under 250 words. Write in clear professional English.`;
         })
       }
     );
+
     const data = await res.json();
 
-    // Handle API errors
     if (data.error) {
-      if (data.error.code === 400 || data.error.code === 403) {
+      const code = data.error.code;
+      const msg  = data.error.message || 'Gemini API error';
+      // Bad/expired key — clear it and re-prompt
+      if (code === 400 || code === 403 || code === 401) {
         localStorage.removeItem(APIKEY_LS);
-        throw new Error('Invalid API key. Click Summarize again to re-enter it.');
+        errorMsg = `API key rejected (${code}): ${msg} — click Summarize again to enter a new key.`;
+      } else {
+        errorMsg = `Gemini error (${code}): ${msg}`;
       }
-      throw new Error(data.error.message || 'Gemini API error');
+    } else {
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary generated.';
+      summaryBox.innerHTML = `<div class="voice-summary-text">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
+      showToast('Customer Voice summary generated', 'success');
     }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No summary generated.';
-    summaryBox.innerHTML = `<div class="voice-summary-text">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
-    showToast('Customer Voice summary generated', 'success');
   } catch(e) {
-    summaryBox.innerHTML = `<div style="color:var(--red);font-size:0.82rem">${e.message}</div>`;
-    showToast('AI summary failed: ' + e.message, 'error');
+    // Network-level failure
+    errorMsg = `Network error: ${e.message}. Check your internet connection and try again.`;
+  }
+
+  if (errorMsg) {
+    summaryBox.innerHTML = `<div style="color:var(--red);font-size:0.82rem;line-height:1.6">${errorMsg}</div>`;
+    showToast('Summary failed', 'error');
   }
 
   btn.disabled = false;
