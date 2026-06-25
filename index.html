@@ -50,7 +50,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
 .loader-ring{width:56px;height:56px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loader-text{color:var(--text-secondary);font-size:0.88rem;letter-spacing:1px}
-.loader-sub{color:var(--text-muted);font-size:0.75rem}
+.loader-sub{color:var(--text-muted);font-size:0.75rem;font-style:italic}
 .loader-progress{width:220px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
 .loader-progress-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:2px;width:0%;transition:width 0.4s ease}
 
@@ -248,7 +248,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
 <div id="loadingOverlay">
   <div class="loader-ring"></div>
   <div class="loader-text">DSAT ACPT DASHBOARD</div>
-  <div class="loader-sub" id="loadingMsg">Connecting to Google Sheets…</div>
+  <div class="loader-sub" id="loadingMsg">"Acknowledging" The Prompt</div>
   <div class="loader-progress"><div class="loader-progress-bar" id="loadBar"></div></div>
 </div>
 
@@ -393,6 +393,45 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
     <div class="drilldown-grid" id="drilldownGrid"></div>
   </div>
 
+  <!-- CALLED CUSTOMER vs ACPT WIDGET -->
+  <div class="section-header"><h2>📞 Customer Outreach vs ACPT</h2><div class="section-line"></div></div>
+  <div class="chart-grid-2" style="margin-bottom:16px">
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>Called Customer Count vs ACPT Tagged</h3>
+        <span id="acptRatePct" style="font-size:0.82rem;font-weight:700;color:var(--green);background:var(--green-dim);border:1px solid rgba(63,185,80,0.3);padding:3px 10px;border-radius:12px">—</span>
+      </div>
+      <div class="chart-sub">Of all customers called (Customer Received = Yes), how many had ACPT forms filled</div>
+      <div class="chart-container"><canvas id="cCalledVsAcpt"></canvas></div>
+    </div>
+    <div class="chart-card" style="justify-content:center">
+      <div class="chart-card-header"><h3>Outreach Summary</h3></div>
+      <div class="chart-sub">Breakdown of call outcomes</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;border-top:3px solid var(--green)">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted)">Called (Received)</div>
+          <div id="calledCount" style="font-size:1.8rem;font-weight:800;color:var(--text-primary);line-height:1.1;margin-top:4px">—</div>
+          <div style="font-size:0.7rem;color:var(--green);margin-top:4px">Customer Received = Yes</div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;border-top:3px solid var(--red)">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted)">Not Reached</div>
+          <div id="notCalledCount" style="font-size:1.8rem;font-weight:800;color:var(--text-primary);line-height:1.1;margin-top:4px">—</div>
+          <div style="font-size:0.7rem;color:var(--red);margin-top:4px">Customer Received = No</div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;border-top:3px solid var(--blue)">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted)">ACPT Tagged</div>
+          <div id="acptTaggedFromCalled" style="font-size:1.8rem;font-weight:800;color:var(--text-primary);line-height:1.1;margin-top:4px">—</div>
+          <div style="font-size:0.7rem;color:var(--blue);margin-top:4px">Of called customers</div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;border-top:3px solid var(--orange)">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted)">ACPT Rate</div>
+          <div id="acptRatePctCard" style="font-size:1.8rem;font-weight:800;color:var(--text-primary);line-height:1.1;margin-top:4px">—</div>
+          <div style="font-size:0.7rem;color:var(--orange);margin-top:4px">Called → ACPT filled</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- CHARTS -->
   <div class="section-header"><h2>📈 ACPT Analytics</h2><div class="section-line"></div></div>
   <div class="chart-grid-3">
@@ -532,6 +571,7 @@ const COL = {
   topicName: 20,     // U - Topic Name (Sub-Category)
   category: 21,      // V - Category (main STS)
   closingW: 22,      // W - Closing
+  customerReceived: 23, // X - Customer Received? (Yes/No)
 };
 
 const ACPT_COLORS = {
@@ -639,13 +679,13 @@ async function loadData() {
 
   try {
     // ── Fetch 121 tab ─────────────────────────────────────────────────────
-    setProgress(20, 'Loading Call Center (121) data…');
+    setProgress(20, '"Connecting" To Sheet');
     const r121 = await fetchSheetCSV(GID_121);
     if (r121.isHTML) throw new Error('121 tab returned an error page. Make sure the sheet is published to the web.');
     allRows121 = parseRows(r121.rows);
 
     // ── Fetch Live Chat tab ───────────────────────────────────────────────
-    setProgress(55, 'Loading Live Chat data…');
+    setProgress(55, '"Prepping" Dashboard');
     try {
       const rLC = await fetchSheetCSV(GID_LC);
       allRowsLC = rLC.isHTML ? [] : parseRows(rLC.rows);
@@ -654,10 +694,10 @@ async function loadData() {
       allRowsLC = [];
     }
 
-    setProgress(85, 'Processing data…');
+    setProgress(85, '"Prepping" Dashboard — Almost There');
     populateFilters();
     applyFilters();
-    setProgress(100, 'Done!');
+    setProgress(100, '"Teed Up" 🎯');
     setTimeout(() => {
       document.getElementById('loadingOverlay').classList.add('hidden');
       document.getElementById('mainContent').style.display = 'block';
@@ -796,6 +836,7 @@ function renderDashboard() {
   document.getElementById('kTotalSub').textContent = mLabel === 'all' ? 'All time holistic' : 'All time holistic';
 
   renderACPTCards();
+  renderCalledVsAcpt();
   renderCharts();
   renderStsTable();
   renderVoices();
@@ -1020,6 +1061,84 @@ function renderReasonBar() {
       scales:{
         x:{ticks:{color:'#6e7681',font:{size:10}},grid:{color:'#21262d'}},
         y:{ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#21262d'}}
+      }
+    }
+  });
+}
+
+function renderCalledVsAcpt() {
+  destroyChart('calledVsAcpt');
+
+  // Count from ALL rows (not just filtered) so we can see total outreach context
+  // But respect channel/month/week filters (use filteredRows as base before ACPT filter)
+  // We use allRows121 + allRowsLC tagged, then apply same channel/date filters but NOT acpt filter
+  const ch    = document.getElementById('fChannel').value;
+  const month = document.getElementById('fMonth').value;
+  const week  = document.getElementById('fWeek').value;
+
+  let baseRows = getChannelRows();
+  if (month !== 'all') {
+    baseRows = baseRows.filter(r => {
+      const d = parseDate(r[COL.callbackDate]);
+      if (!d) return false;
+      return (d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')) === month;
+    });
+  }
+  if (week !== 'all') {
+    baseRows = baseRows.filter(r => {
+      const d = parseDate(r[COL.callbackDate]);
+      if (!d) return false;
+      return getWeekOfMonth(d) === +week;
+    });
+  }
+
+  const called    = baseRows.filter(r => String(r[COL.customerReceived] || '').trim().toLowerCase() === 'yes');
+  const notCalled = baseRows.filter(r => String(r[COL.customerReceived] || '').trim().toLowerCase() === 'no');
+  // ACPT tagged among those who were called (i.e. have a non-empty ACPT tag AND were received)
+  const acptFromCalled = called.filter(r => String(r[COL.acptTag] || '').trim() !== '');
+
+  const calledN     = called.length;
+  const notCalledN  = notCalled.length;
+  const acptN       = acptFromCalled.length;
+  const pct         = calledN ? (acptN / calledN * 100).toFixed(1) : '0.0';
+
+  document.getElementById('calledCount').textContent         = calledN.toLocaleString();
+  document.getElementById('notCalledCount').textContent      = notCalledN.toLocaleString();
+  document.getElementById('acptTaggedFromCalled').textContent = acptN.toLocaleString();
+  document.getElementById('acptRatePctCard').textContent     = pct + '%';
+  document.getElementById('acptRatePct').textContent         = pct + '% ACPT Rate';
+
+  const ctx = document.getElementById('cCalledVsAcpt').getContext('2d');
+  charts['calledVsAcpt'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Called (Received)', 'ACPT Tagged', 'Not Reached'],
+      datasets: [{
+        label: 'Count',
+        data: [calledN, acptN, notCalledN],
+        backgroundColor: ['rgba(63,185,80,0.6)', 'rgba(88,166,255,0.6)', 'rgba(248,81,73,0.5)'],
+        borderColor:     ['#3fb950', '#58a6ff', '#f85149'],
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.raw;
+              if (ctx.dataIndex === 1 && calledN) return `ACPT Tagged: ${v} (${(v/calledN*100).toFixed(1)}% of called)`;
+              return `${ctx.label}: ${v}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } }
       }
     }
   });
