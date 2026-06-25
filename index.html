@@ -257,7 +257,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
   <div class="header-left">
     <div class="header-logo">📊</div>
     <div>
-      <div class="header-title">DSAT ACPT DASHBOARD</div>
+      <div class="header-title">DSAT ACPT Analysis</div>
       <div class="header-sub">Agent · Customer · Process / Product · Technology</div>
     </div>
   </div>
@@ -520,7 +520,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
 
 </div>
 
-<div class="footer" id="footerEl" style="display:none">DSAT ACPT Dashboard · Grameenphone · Call Center & Live Chat Quality</div>
+<div class="footer" id="footerEl" style="display:none">DSAT ACPT Analysis Dashboard · Grameenphone · Call Center & Live Chat Quality</div>
 
 <!-- API KEY MODAL -->
 <div class="apikey-modal-overlay" id="apikeyModal">
@@ -604,6 +604,8 @@ const REASON_COL = {
 // ═══════════════════════════════════════════
 let allRows121 = [];
 let allRowsLC  = [];
+let rawRows121 = [];   // all rows including those without ACPT tag (for outreach widget)
+let rawRowsLC  = [];
 let filteredRows = [];
 let charts = {};
 let currentDrilldown = null;
@@ -686,15 +688,18 @@ async function loadData() {
     setProgress(20, '"Connecting" To Sheet');
     const r121 = await fetchSheetCSV(GID_121);
     if (r121.isHTML) throw new Error('121 tab returned an error page. Make sure the sheet is published to the web.');
+    rawRows121 = r121.rows.slice(1);          // all rows, no ACPT filter
     allRows121 = parseRows(r121.rows);
 
     // ── Fetch Live Chat tab ───────────────────────────────────────────────
     setProgress(55, '"Prepping" Dashboard');
     try {
       const rLC = await fetchSheetCSV(GID_LC);
-      allRowsLC = rLC.isHTML ? [] : parseRows(rLC.rows);
+      rawRowsLC  = rLC.isHTML ? [] : rLC.rows.slice(1);   // all rows, no ACPT filter
+      allRowsLC  = rLC.isHTML ? [] : parseRows(rLC.rows);
     } catch(e) {
       console.warn('Live Chat tab failed:', e);
+      rawRowsLC = [];
       allRowsLC = [];
     }
 
@@ -1073,14 +1078,18 @@ function renderReasonBar() {
 function renderCalledVsAcpt() {
   destroyChart('calledVsAcpt');
 
-  // Count from ALL rows (not just filtered) so we can see total outreach context
-  // But respect channel/month/week filters (use filteredRows as base before ACPT filter)
-  // We use allRows121 + allRowsLC tagged, then apply same channel/date filters but NOT acpt filter
   const ch    = document.getElementById('fChannel').value;
   const month = document.getElementById('fMonth').value;
   const week  = document.getElementById('fWeek').value;
 
-  let baseRows = getChannelRows();
+  // Use RAW rows (not ACPT-filtered) so "Not Reached" rows are included
+  let baseRows = [];
+  if (ch === 'all' || ch === '121')      baseRows = baseRows.concat(rawRows121);
+  if (ch === 'all' || ch === 'livechat') baseRows = baseRows.concat(rawRowsLC);
+
+  // Remove completely empty rows
+  baseRows = baseRows.filter(r => r && r.length > 0 && r.some(c => String(c||'').trim()));
+
   if (month !== 'all') {
     baseRows = baseRows.filter(r => {
       const d = parseDate(r[COL.callbackDate]);
