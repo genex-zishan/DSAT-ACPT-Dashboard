@@ -1112,8 +1112,9 @@ function renderCalledVsAcpt() {
 
   const calledN     = called.length;
   const notCalledN  = notCalled.length;
+  const totalN      = calledN + notCalledN;
   const acptN       = acptFromCalled.length;
-  const pct         = calledN ? (acptN / calledN * 100).toFixed(1) : '0.0';
+  const pct         = totalN ? (acptN / totalN * 100).toFixed(1) : '0.0';
 
   document.getElementById('calledCount').textContent         = calledN.toLocaleString();
   document.getElementById('notCalledCount').textContent      = notCalledN.toLocaleString();
@@ -1143,7 +1144,7 @@ function renderCalledVsAcpt() {
           callbacks: {
             label: ctx => {
               const v = ctx.raw;
-              if (ctx.dataIndex === 1 && calledN) return `ACPT Tagged: ${v} (${(v/calledN*100).toFixed(1)}% of called)`;
+              if (ctx.dataIndex === 1 && totalN) return `ACPT Tagged: ${v} (${(v/totalN*100).toFixed(1)}% of total called)`;
               return `${ctx.label}: ${v}`;
             }
           }
