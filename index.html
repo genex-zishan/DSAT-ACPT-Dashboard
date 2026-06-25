@@ -263,6 +263,10 @@ body{font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-seri
   </div>
   <div class="header-right">
     <div class="live-badge"><div class="live-dot"></div>Live</div>
+    <div id="autoRefreshBadge" style="font-size:0.7rem;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:3px 9px;display:flex;align-items:center;gap:5px">
+      <span id="autoRefreshIcon">⏱</span>
+      <span id="autoRefreshLabel">—</span>
+    </div>
     <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       Refresh
@@ -1425,13 +1429,114 @@ function showToast(msg, type='info') {
   setTimeout(() => el.remove(), 3800);
 }
 
-// Close dropdowns on outside click
-document.addEventListener('click', () => {});
+// ═══════════════════════════════════════════
+// AUTO-REFRESH SCHEDULER (Bangladesh Time)
+// Active: 10:00 AM – 10:00 PM BST (UTC+6)
+// Interval: every 15 minutes
+// Outside window: manual only
+// ═══════════════════════════════════════════
+
+let autoRefreshTimer = null;
+let countdownTimer  = null;
+let nextRefreshAt   = null;
+
+function getBDTime() {
+  // Bangladesh is UTC+6
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + 6 * 3600000);
+}
+
+function isAutoRefreshWindow() {
+  const bd = getBDTime();
+  const h = bd.getHours();
+  const m = bd.getMinutes();
+  const totalMin = h * 60 + m;
+  // 10:00 AM = 600 min, 10:00 PM = 1320 min
+  return totalMin >= 600 && totalMin < 1320;
+}
+
+function msUntilWindowOpen() {
+  const bd = getBDTime();
+  const h = bd.getHours(), m = bd.getMinutes(), s = bd.getSeconds(), ms = bd.getMilliseconds();
+  // next 10:00 AM BD
+  let next = new Date(bd);
+  next.setHours(10, 0, 0, 0);
+  if (next <= bd) next.setDate(next.getDate() + 1);
+  return next - bd;
+}
+
+function scheduleNextRefresh() {
+  clearTimeout(autoRefreshTimer);
+  clearInterval(countdownTimer);
+  nextRefreshAt = null;
+
+  if (!isAutoRefreshWindow()) {
+    updateRefreshBadge(false);
+    // Re-check when window opens
+    const msUntil = msUntilWindowOpen();
+    autoRefreshTimer = setTimeout(scheduleNextRefresh, msUntil);
+    return;
+  }
+
+  // Schedule refresh at next 15-min mark
+  const bd = getBDTime();
+  const totalSec = bd.getHours() * 3600 + bd.getMinutes() * 60 + bd.getSeconds();
+  const secIntoInterval = totalSec % (15 * 60);
+  const secUntilNext = (15 * 60) - secIntoInterval;
+  nextRefreshAt = Date.now() + secUntilNext * 1000;
+
+  updateRefreshBadge(true);
+  startCountdown();
+
+  autoRefreshTimer = setTimeout(() => {
+    loadData();
+    scheduleNextRefresh();
+  }, secUntilNext * 1000);
+}
+
+function startCountdown() {
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    if (!isAutoRefreshWindow()) {
+      clearInterval(countdownTimer);
+      scheduleNextRefresh();
+      return;
+    }
+    updateRefreshBadge(true);
+  }, 1000);
+}
+
+function updateRefreshBadge(active) {
+  const icon  = document.getElementById('autoRefreshIcon');
+  const label = document.getElementById('autoRefreshLabel');
+  const badge = document.getElementById('autoRefreshBadge');
+  if (!icon) return;
+
+  if (!active) {
+    icon.textContent  = '🔒';
+    label.textContent = 'Manual only';
+    badge.style.borderColor = 'var(--border)';
+    badge.style.color = 'var(--text-muted)';
+    return;
+  }
+
+  const secsLeft = nextRefreshAt ? Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000)) : 0;
+  const mm = String(Math.floor(secsLeft / 60)).padStart(2,'0');
+  const ss = String(secsLeft % 60).padStart(2,'0');
+  icon.textContent  = '🔄';
+  label.textContent = `Auto ${mm}:${ss}`;
+  badge.style.borderColor = 'rgba(63,185,80,0.4)';
+  badge.style.color = 'var(--green)';
+}
 
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', loadData);
+window.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  scheduleNextRefresh();
+});
 </script>
 </body>
 </html>
