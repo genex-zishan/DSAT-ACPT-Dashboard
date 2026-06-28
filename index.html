@@ -585,6 +585,22 @@ const ACPT_COLORS = {
   'Technology':      '#bc8cff',
 };
 
+// Normalize ACPT tag so minor spacing/slash variations all map to canonical values.
+// Handles: "Process/Product", "Process/ Product", "Process / Product", case differences, etc.
+function normalizeACPT(raw) {
+  if (!raw) return '';
+  let s = String(raw).trim();
+  // Normalize spaces around slash
+  s = s.replace(/\s*\/\s*/g, ' / ');
+  // Canonical map (case-insensitive prefix match)
+  const lower = s.toLowerCase();
+  if (lower.startsWith('agent'))    return 'Agent';
+  if (lower.startsWith('customer')) return 'Customer';
+  if (lower.startsWith('process') || lower.startsWith('product')) return 'Process / Product';
+  if (lower.startsWith('tech'))     return 'Technology';
+  return s; // return as-is if nothing matched
+}
+
 const DSAT_REASONS = {
   'Agent':            ['Agent Behavior','Agent Knowledge Gap','Casual Approach','Lack of Efficiency','Lack of Attentiveness'],
   'Customer':         ['Customer Understanding Gap','Mistakenly Provided DSAT','Incomplete Interaction'],
@@ -665,7 +681,14 @@ async function fetchSheetCSV(gid) {
 }
 
 function parseRows(rawRows) {
-  return rawRows.slice(1).filter(r => r[COL.acptTag] && String(r[COL.acptTag]).trim());
+  return rawRows.slice(1)
+    .filter(r => r[COL.acptTag] && String(r[COL.acptTag]).trim())
+    .map(r => {
+      const norm = normalizeACPT(r[COL.acptTag]);
+      const copy = [...r];
+      copy[COL.acptTag] = norm;
+      return copy;
+    });
 }
 
 // ── GID Setup UI ──────────────────────────────────────────────────────────────
